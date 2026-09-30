@@ -1,0 +1,95 @@
+name: Evolune Android CI v6
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: EVOLUNE CI V6 — checkout
+        uses: actions/checkout@v4
+
+      - name: EVOLUNE CI V6 — verify repository configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "EVOLUNE_CI_VERSION=6"
+          grep -F 'compileSdk = 36' app/build.gradle.kts
+          grep -F 'targetSdk = 36' app/build.gradle.kts
+          grep -F 'minSdk = 29' app/build.gradle.kts
+          grep -F 'compose-bom:2025.08.00' app/build.gradle.kts
+          if grep -R --line-number 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then
+            echo 'ERROR: INTERNET permission must not be present' >&2
+            exit 1
+          fi
+          if grep -R --line-number -E 'compose-bom:2026|core-ktx:1\.1[89]|activity-compose:1\.1[23]|lifecycle-.*:2\.1[01]' app/build.gradle.kts; then
+            echo 'ERROR: API-37-requiring dependency reintroduced' >&2
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify GitHub runner Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-}"
+          test -n "${ANDROID_HOME:-}"
+          test -f "${ANDROID_HOME}/platforms/android-36/android.jar"
+          test -d "${ANDROID_HOME}/build-tools/36.0.0"
+          echo "Using preinstalled Android SDK Platform 36 and Build Tools 36.0.0."
+
+      - name: Set up Gradle 9.6.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.1'
+          validate-wrappers: false
+
+      - name: Generate official Gradle wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f gradle/wrapper/gradle-wrapper.jar
+          gradle wrapper \
+            --gradle-version 9.6.1 \
+            --distribution-type bin \
+            --gradle-distribution-sha256-sum 9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --version
+
+      - name: Clean
+        run: ./gradlew --no-daemon --stacktrace clean
+
+      - name: Verify Android dependency metadata
+        run: ./gradlew --no-daemon --stacktrace :app:checkDebugAarMetadata
+
+      - name: Compile debug sources
+        run: ./gradlew --no-daemon --stacktrace :app:compileDebugKotlin
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon --stacktrace testDebugUnitTest
+
+      - name: Android lint
+        run: ./gradlew --no-daemon --stacktrace lintDebug
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Evolune-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
