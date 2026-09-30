@@ -2,6 +2,8 @@
 
 **Every life builds a character. This one is yours.**
 
+> **Status:** active development. The repository is being hardened through its Android CI pipeline before any public release is presented as production-ready.
+
 Evolune is a native, offline-first Android real-life RPG for personal development. It turns meaningful real-world effort into permanent character progression without pretending to score a person's worth, relationships, spirituality, health, or attractiveness.
 
 The app is designed to the quality standard of a mature production application: compact daily use, deliberate game feedback, long-horizon progression, local persistence, accessibility, and no account or backend dependency.
